@@ -12,7 +12,16 @@ const cookieParser = require("cookie-parser");
 
 const app = express();
 app.use(bodyParser.json());
-app.use(cors()); 
+app.use(cors({
+  origin: ["http://localhost:5500", "http://127.0.0.1:5500"],
+  credentials: true
+}));
+// ⬇️ Tambahin header manual di sini
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  next();
+});
 app.use(cookieParser());
 
 // routes

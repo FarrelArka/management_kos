@@ -6,5 +6,8 @@ const authenticate = require('../middleware/auth');
 router.post('/register', auth.register); // body: name,email,password,phone,role(optional)
 router.post('/login', auth.login);
 router.post('/upgrade-owner', authenticate, auth.upgradeToOwner); // society -> owner
+router.get("/check", authenticate, auth.checkSession);
 
+// ✅ LOGOUT
+router.post("/logout", auth.logout);
 module.exports = router;
