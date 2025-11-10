@@ -167,3 +167,73 @@ exports.invoice = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+// ===========================
+// 🔹 HISTORY BY DATE (simple)
+// ===========================
+exports.historyByDate = async (req, res) => {
+  try {
+    const { from } = req.params;
+    const { to } = req.query;
+
+    if (!from)
+      return res.status(400).json({ message: "Tanggal awal wajib diisi (format YYYY-MM-DD)" });
+
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(from))
+      return res.status(400).json({ message: "Format tanggal 'from' harus YYYY-MM-DD" });
+    if (to && !dateRegex.test(to))
+      return res.status(400).json({ message: "Format tanggal 'to' harus YYYY-MM-DD" });
+
+    const startDate = new Date(`${from}T00:00:00`);
+    const endDate = to ? new Date(`${to}T23:59:59`) : new Date(`${from}T23:59:59`);
+
+    // ambil semua kos milik user
+    const kosList = await Kos.findAll({
+      where: { user_id: req.user.id },
+      attributes: ["id"],
+    });
+
+    const kosIds = kosList.map((k) => k.id);
+    if (kosIds.length === 0)
+      return res.status(404).json({ message: "Kamu belum memiliki kos" });
+
+    // cari booking yang aktif di rentang tanggal itu
+    const bookings = await Booking.findAll({
+      where: {
+        kos_id: kosIds,
+        [Op.or]: [
+          {
+            start_date: { [Op.between]: [startDate, endDate] },
+          },
+          {
+            end_date: { [Op.between]: [startDate, endDate] },
+          },
+          // tambahan: booking yang mencakup seluruh range
+          {
+            [Op.and]: [
+              { start_date: { [Op.lte]: startDate } },
+              { end_date: { [Op.gte]: endDate } },
+            ],
+          },
+        ],
+      },
+      include: [
+        { model: Kos, as: "Kos", attributes: ["name", "price_per_month"] },
+        { model: User, as: "User", attributes: ["name", "email"] },
+      ],
+      order: [["start_date", "DESC"]],
+    });
+
+    if (bookings.length === 0)
+      return res.status(404).json({ message: "Tidak ada booking pada tanggal tersebut" });
+
+    res.json({
+      from,
+      to: to || from,
+      total: bookings.length,
+      bookings,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

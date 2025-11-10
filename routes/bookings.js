@@ -15,4 +15,5 @@ router.get('/history', authenticate, requireRole('owner'), bookingCtl.history);
 // Invoice (both owner of kos and booking owner can access)
 router.get('/:bookingId/invoice', authenticate, bookingCtl.invoice);
 
+router.get("/history/:from", authenticate, bookingCtl.historyByDate);
 module.exports = router;
