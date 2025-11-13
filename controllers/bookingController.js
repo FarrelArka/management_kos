@@ -74,24 +74,54 @@ exports.createBooking = async (req, res) => {
 };
 
 // Owner: change status (accept/reject)
+// Owner: change status (accept/reject)
 exports.changeStatus = async (req, res) => {
   try {
     const { bookingId } = req.params;
     const { status } = req.body;
+
     if (!["accept", "reject"].includes(status))
       return res.status(400).json({ message: "Invalid status" });
+
+    // 🔹 Cek booking
     const booking = await Booking.findByPk(bookingId);
-    if (!booking) return res.status(404).json({ message: "Not found" });
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+    // 🔹 Cek kos terkait
     const kos = await Kos.findByPk(booking.kos_id);
+    if (!kos) return res.status(404).json({ message: "Kos not found" });
+
+    // 🔹 Cek apakah yang ubah adalah owner kos
     if (kos.user_id !== req.user.id)
       return res.status(403).json({ message: "Forbidden" });
+
+    // 🔹 Kalau status = "accept"
+    if (status === "accept") {
+      if (kos.kamar_tersedia <= 0) {
+        return res
+          .status(400)
+          .json({ message: "Kamar sudah penuh, tidak bisa menerima booking baru" });
+      }
+
+      // Kurangi kamar tersedia
+      kos.kamar_tersedia -= 1;
+      await kos.save();
+    }
+
+    // 🔹 Update status booking
     booking.status = status;
     await booking.save();
-    res.json(booking);
+
+    res.json({
+      message: `Booking berhasil di-${status}`,
+      booking,
+      kamar_tersedia_sisa: kos.kamar_tersedia,
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 // History berdasarkan tanggal/bulan (owner)
 exports.history = async (req, res) => {

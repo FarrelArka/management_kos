@@ -11,18 +11,23 @@ const { Op } = require("sequelize");
 // 🟢 List semua kos (dengan filter optional)
 exports.listKos = async (req, res) => {
   try {
-    const { gender, q, limit = 20, offset = 0 } = req.query;
+    const { gender, q, availableOnly, limit = 20, offset = 0 } = req.query;
     const where = {};
 
     if (gender) where.gender = gender;
     if (q) where.name = { [Op.like]: `%${q}%` };
+
+    // Filter hanya kos yang masih ada kamar
+    if (availableOnly === "true") {
+      where.kamar_tersedia = { [Op.gt]: 0 };
+    }
 
     const data = await Kos.findAll({
       where,
       include: [
         { model: KosImage, as: "Images", attributes: ["file"] },
         { model: KosFacility, as: "Facilities", attributes: ["facility"] },
-        { model: User, as: "Owner", attributes: ["id", "name", "phone"] }, // ✅ pakai alias
+        { model: User, as: "Owner", attributes: ["id", "name", "phone"] },
       ],
       limit: parseInt(limit),
       offset: parseInt(offset),
@@ -40,11 +45,11 @@ exports.getKosByGender = async (req, res) => {
     const gender = req.params.gender;
 
     const data = await Kos.findAll({
-      where: { gender },
+      where: { gender, kamar_tersedia: { [Op.gt]: 0 } },
       include: [
         { model: KosImage, as: "Images", attributes: ["file"] },
         { model: KosFacility, as: "Facilities", attributes: ["facility"] },
-        { model: User, as: "Owner", attributes: ["id", "name", "phone"] }, // ✅ pakai alias
+        { model: User, as: "Owner", attributes: ["id", "name", "phone"] },
       ],
     });
 
@@ -68,7 +73,7 @@ exports.getKos = async (req, res) => {
       include: [
         { model: KosImage, as: "Images", attributes: ["file"] },
         { model: KosFacility, as: "Facilities", attributes: ["facility"] },
-        { model: User, as: "Owner", attributes: ["id", "name", "phone"] }, // ✅ pakai alias
+        { model: User, as: "Owner", attributes: ["id", "name", "phone"] },
       ],
     });
     if (!data) return res.status(404).json({ message: "Kos not found" });
@@ -81,13 +86,15 @@ exports.getKos = async (req, res) => {
 // 🟠 CREATE (Kos + Images + Facilities)
 exports.createKos = async (req, res) => {
   try {
-    console.log("==== DEBUG FILES ====");
-    console.log(req.files);
-    console.log("FIELD YANG DITERIMA POSTMAN:", req.body);
-    console.log("FILES YANG DITERIMA:", req.files);
-
     const created = await Kos.sequelize.transaction(async (t) => {
-      const { name, address, price_per_month, gender, facilities } = req.body;
+      const {
+        name,
+        address,
+        price_per_month,
+        gender,
+        facilities,
+        total_kamar,
+      } = req.body;
 
       const kos = await Kos.create(
         {
@@ -96,6 +103,8 @@ exports.createKos = async (req, res) => {
           address,
           price_per_month,
           gender,
+          total_kamar,
+          kamar_tersedia: total_kamar, // default semua kamar tersedia
         },
         { transaction: t }
       );
@@ -140,7 +149,6 @@ exports.createKos = async (req, res) => {
   }
 };
 
-// 🟡 UPDATE Kos
 // 🟡 UPDATE Kos (support upload foto baru)
 exports.updateKos = async (req, res) => {
   const t = await Kos.sequelize.transaction();
@@ -150,11 +158,19 @@ exports.updateKos = async (req, res) => {
     if (kos.user_id !== req.user.id)
       return res.status(403).json({ message: "Not owner of this kos" });
 
-    const { name, address, price_per_month, gender, facilities } = req.body;
+    const {
+      name,
+      address,
+      price_per_month,
+      gender,
+      facilities,
+      total_kamar,
+      kamar_tersedia,
+    } = req.body;
 
     // Update data utama kos
     await kos.update(
-      { name, address, price_per_month, gender },
+      { name, address, price_per_month, gender, total_kamar, kamar_tersedia },
       { transaction: t }
     );
 
@@ -186,9 +202,9 @@ exports.updateKos = async (req, res) => {
 
     const updated = await Kos.findByPk(kos.id, {
       include: [
-        { model: KosImage, attributes: ["file"] },
-        { model: KosFacility, attributes: ["facility"] },
-        { model: User, attributes: ["id", "name", "phone"] },
+        { model: KosImage, as: "Images", attributes: ["file"] },
+        { model: KosFacility, as: "Facilities", attributes: ["facility"] },
+        { model: User, as: "Owner", attributes: ["id", "name", "phone"] },
       ],
     });
 
